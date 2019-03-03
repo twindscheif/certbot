@@ -10,6 +10,7 @@ import dns.rdatatype
 import dns.tsig
 import dns.tsigkeyring
 import dns.update
+import dns.resolver
 import zope.interface
 
 from certbot import errors
@@ -113,7 +114,12 @@ class _RFC2136Client(object):
 
         n = dns.name.from_text(record_name)
         o = dns.name.from_text(domain)
-        rel = n.relativize(o)
+        if o.is_superdomain(n):
+            rel = n.relativize(o)
+            logger.debug('Rel: %s', rel)
+        else:
+            rel = domain
+
 
         update = dns.update.Update(
             domain,
@@ -148,7 +154,11 @@ class _RFC2136Client(object):
 
         n = dns.name.from_text(record_name)
         o = dns.name.from_text(domain)
-        rel = n.relativize(o)
+        if o.is_superdomain(n):
+            rel = n.relativize(o)
+            logger.debug('Rel: %s', rel)
+        else:
+            rel = domain
 
         update = dns.update.Update(
             domain,
@@ -178,7 +188,14 @@ class _RFC2136Client(object):
         :rtype: str
         :raises certbot.errors.PluginError: if no SOA record can be found.
         """
-
+        try:
+            CheckDelegation = dns.resolver.query(record_name, 'SOA')
+            DelegationDomain = CheckDelegation.canonical_name.to_text()
+            logger.debug('Domain is delegated to another Nameserver. Delegation Domain: %s', DelegationDomain)
+            return CheckDelegation.canonical_name.to_text()
+        except Exception as e:
+            logger.debug('Domain is not delegated to another Nameserver.'.format(e))
+            
         domain_name_guesses = dns_common.base_domain_name_guesses(record_name)
 
         # Loop through until we find an authoritative SOA record
